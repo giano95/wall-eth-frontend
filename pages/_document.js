@@ -18,7 +18,7 @@ export default function Document() {
                     rel="stylesheet"
                 ></link>
                 <link
-                    href="https://fonts.googleapis.com/css2?family=Iceberg:wght@300;400;500;600;700&display=swap%27"
+                    href="https://fonts.googleapis.com/css2?family=Iceberg&display=swap%27"
                     rel="stylesheet"
                 ></link>
             </Head>

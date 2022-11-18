@@ -6,6 +6,11 @@ import { getRandomAvatar } from '../utils/getRandomAvatar'
 import { useAccount, useNetwork, useContract, useContractRead, useProvider, useSigner } from 'wagmi'
 import { useEffect, useState } from 'react'
 import { ethers } from 'ethers'
+import {
+    RocketLaunchIcon,
+    CpuChipIcon,
+    ArrowTopRightOnSquareIcon,
+} from '@heroicons/react/24/outline'
 
 const NULL_ADDRESS = '0x0000000000000000000000000000000000000000'
 const contractAddresses = require('../constants/contractAddresses.json')
@@ -19,16 +24,25 @@ export default function Home() {
     const { data: signer, isError, isLoading } = useSigner()
 
     // Staking
-    const [stakingAmount, setStakingAmount] = useState(0.0)
+    const [stakingAmount, setStakingAmount] = useState(1.0)
     const [stakingInfo, setStakingInfo] = useState('')
     const [withdrawStakingInfo, setWithdrawStakingInfo] = useState('')
     const [stakingBalance, setStakingBalance] = useState(0.0)
 
     // Funding
-    const [fundingAmount, setFundingAmount] = useState(0.0)
+    const [fundingAmount, setFundingAmount] = useState(6.0)
     const [fundingInfo, setFundingInfo] = useState('')
     const [withdrawFundingInfo, setWithdrawFundingInfo] = useState('')
     const [fundingBalance, setFundingBalance] = useState(0.0)
+
+    // Bot Creation
+    const [botName, setBotName] = useState('myBot_0')
+    const [botOrderInterval, setBotOrderInterval] = useState(3600)
+    const [botOrderSize, setBotOrderSize] = useState(0.1)
+    const [botInfo, setBotInfo] = useState('')
+
+    // Trading
+    const [tradingBalance, setTradingBalance] = useState(0.0)
 
     async function handleStakeSubmit(e) {
         e.preventDefault()
@@ -191,9 +205,53 @@ export default function Home() {
 
         const sBalance = await tradingBotContract.stakingBalance(address)
         const fBalance = await tradingBotContract.fundingBalance(address)
+        const tBalance = await tradingBotContract.tradingBalance(address)
+        const sBalanceString = ethers.utils.formatEther(sBalance)
+        const fBalanceString = ethers.utils.formatEther(fBalance)
+        const tBalanceString = ethers.utils.formatEther(tBalance)
 
-        setStakingBalance(ethers.utils.formatEther(sBalance))
-        setFundingBalance(ethers.utils.formatEther(fBalance))
+        setStakingBalance(Number(sBalanceString).toFixed(8))
+        setFundingBalance(Number(fBalanceString).toFixed(8))
+        setTradingBalance(Number(tBalanceString).toFixed(8))
+    }
+
+    async function handleCreateBotSubmit(e) {
+        e.preventDefault()
+
+        // Check that the amount is > 0
+        if (botOrderInterval <= 0 || botOrderSize <= 0) {
+            setBotInfo('Order Interval and Order Size must be >= 0')
+            return
+        }
+
+        // Parse the orderSize into wei
+        const botOrderSizeWei = ethers.utils.parseEther(botOrderSize.toString())
+
+        // Initialize the contract
+        const tradingBotAddress = contractAddresses[chain.id]['TradingBotV3']
+        const tradingBotAbi = contractAbis[chain.id]['TradingBotV3']
+        const tradingBotContract = new ethers.Contract(tradingBotAddress, tradingBotAbi, signer)
+
+        // registerNewAutomation from the contract
+        try {
+            const txResponse = await tradingBotContract.registerNewAutomation(
+                botName,
+                ethers.utils.parseEther('0.000000000000999999'), // gasLimit
+                ethers.utils.parseEther('5.0'), // fundingAmount
+                botOrderInterval,
+                botOrderSizeWei,
+                {
+                    gasLimit: 5000000,
+                }
+            )
+            setBotInfo('Creating...')
+            const txReceipt = await txResponse.wait()
+            setBotInfo('Bot Created!')
+        } catch (error) {
+            console.log(error)
+            setBotInfo('An error occured :(')
+            return
+        }
     }
 
     useEffect(() => {
@@ -214,80 +272,28 @@ export default function Home() {
     return (
         <div className="min-h-screen flex flex-col">
             <div className="w-full max-w-4xl mx-auto rounded-xl mt-32 px-6 flex flex-col justify-start items-center bg-white dark:bg-gray-850 shadow-md dark:shadow-lg">
-                {/* - Staking Row - */}
-                <div className="h-24 w-full px-3 flex flex-row justify-between items-start pt-5">
-                    {/* - Staking Balance - */}
-                    <div className="text-gray-800 dark:text-gray-300 flex flex-col justify-center items-start">
-                        <div>Staking Balance</div>
-                        <div>
-                            <span className="text-black dark:text-white">{stakingBalance}</span>{' '}
-                            WETH
-                        </div>
-                    </div>
-                    {/* - Stake Form - */}
-                    <div className="flex flex-col justify-center items-center">
-                        <form onSubmit={handleStakeSubmit} className="flex flex-row">
-                            <button
-                                type="submit"
-                                className="h-10 px-5 rounded-l-lg text-black dark:text-white bg-gradient-to-r from-green-400 to-blue-500 hover:from-pink-500 hover:to-yellow-500"
-                            >
-                                Stake
-                            </button>
-                            <input
-                                className="h-10 w-36 text-start text-gray-500 dark:text-gray-850 bg-gray-100 dark:bg-gray-200 border-gray-100 dark:border-gray-200 rounded-r-lg"
-                                name="stakingAmount"
-                                id="stakingAmount"
-                                type="number"
-                                placeholder="Amount"
-                                required={true}
-                                value={stakingAmount}
-                                onChange={(e) => setStakingAmount(e.target.value)}
-                            />
-                        </form>
-                        <div className="mt-1.5 text-gray-800 dark:text-gray-300 text-sm font-semibold">
-                            {stakingInfo}
-                        </div>
-                    </div>
-                    {/* - Withdraw Button - */}
-                    <div className="flex flex-col justify-center items-center">
-                        <button
-                            type="button"
-                            onClick={withdrawStaking}
-                            className="h-10 px-5 rounded-lg text-black dark:text-white bg-gradient-to-r from-green-400 to-blue-500 hover:from-pink-500 hover:to-yellow-500"
-                        >
-                            Withdraw
-                        </button>
-                        <div className="mt-1.5 text-gray-800 dark:text-gray-300 text-sm font-semibold">
-                            {withdrawStakingInfo}
-                        </div>
-                    </div>
+                {/* Title */}
+                <div className="h-16 pt-4 flex flex-row justify-center items-center text-black dark:text-white text-2xl font-semibold">
+                    <div>1. Add some LINK Funds</div>
                 </div>
-                <div className="h-[1px] w-full bg-gradient-to-r from-green-400 to-blue-500"></div>
                 {/* - Funding Row - */}
-                <div className="h-24 w-full px-3 flex flex-row justify-between items-start pt-5">
-                    {/* - Funding Balance - */}
-                    <div className="text-gray-800 dark:text-gray-300 flex flex-col justify-center items-start">
-                        <div>Funding Balance</div>
-                        <div>
-                            <span className="text-black dark:text-white">{fundingBalance}</span>{' '}
-                            LINK
-                        </div>
-                    </div>
-                    {/* - Stake Form - */}
+                <div className="h-24 w-full px-3 flex flex-row justify-between items-start pt-5 mb-3">
+                    {/* - Funding Form - */}
                     <div className="flex flex-col justify-center items-center">
                         <form onSubmit={handleFundSubmit} className="flex flex-row">
                             <button
                                 type="submit"
-                                className="h-10 px-5 rounded-l-lg text-black dark:text-white bg-gradient-to-r from-green-400 to-blue-500 hover:from-pink-500 hover:to-yellow-500"
+                                className="h-12 px-5 rounded-l-lg text-white dark:text-gray-850 
+                                bg-blue-500 dark:bg-blue-400 hover:bg-blue-600 hover:dark:bg-blue-500"
                             >
                                 Fund
                             </button>
                             <input
-                                className="h-10 w-36 text-start text-gray-500 dark:text-gray-850 bg-gray-100 dark:bg-gray-200 border-gray-100 dark:border-gray-200 rounded-r-lg"
+                                className="h-12 w-36 text-start text-gray-500 dark:text-gray-850 bg-gray-100 dark:bg-gray-200 border-gray-100 dark:border-gray-200 rounded-r-lg"
                                 name="fundingAmount"
                                 id="fundingAmount"
                                 type="number"
-                                placeholder="Amount"
+                                placeholder="6.0 LINK"
                                 required={true}
                                 value={fundingAmount}
                                 onChange={(e) => setFundingAmount(e.target.value)}
@@ -297,14 +303,323 @@ export default function Home() {
                             {fundingInfo}
                         </div>
                     </div>
+                    {/* - Funding Balance - */}
+                    <div className="flex flex-row justify-start items-center">
+                        <div className="h-12 px-4 rounded-l-md border border-gray-200 text-gray-800 dark:text-gray-300 flex flex-col justify-center items-start">
+                            <div>
+                                {fundingBalance}{' '}
+                                <span className="text-blue-500 dark:text-blue-400">LINK</span>{' '}
+                            </div>
+                        </div>
+                        <Image
+                            className="w-12 h-12 bg-gray-300 dark:bg-gray-200 rounded-r-md border border-gray-300 dark:border-gray-200
+                            filter brightness-110 dark:brightness-100"
+                            src={'/images/link-token-2.png'}
+                            alt=""
+                            width={36}
+                            height={36}
+                        />
+                    </div>
+                </div>
+                <div className="h-[1px] w-full bg-gray-300 dark:bg-gray-200"></div>
+                {/* Title */}
+                <div className="h-16 pt-4 flex flex-row justify-center items-center text-black dark:text-white text-2xl font-semibold">
+                    <div>2. Stake some WETH</div>
+                </div>
+                {/* - Staking Row - */}
+                <div className="h-24 w-full px-3 flex flex-row justify-between items-start pt-5 mb-4">
+                    {/* - Stake Form - */}
+                    <div className="flex flex-col justify-center items-center">
+                        <form onSubmit={handleStakeSubmit} className="flex flex-row">
+                            <button
+                                type="submit"
+                                className="h-12 px-5 rounded-l-lg text-white dark:text-gray-850 
+                                bg-indigo-400 dark:bg-indigo-400 hover:bg-indigo-500 hover:dark:bg-indigo-500"
+                            >
+                                Stake
+                            </button>
+                            <input
+                                className="h-12 w-36 text-start text-gray-700 dark:text-gray-850 bg-gray-100 dark:bg-gray-200 border-gray-100 dark:border-gray-200 rounded-r-lg"
+                                name="stakingAmount"
+                                id="stakingAmount"
+                                type="number"
+                                placeholder="1.0 WETH"
+                                required={true}
+                                value={stakingAmount}
+                                onChange={(e) => setStakingAmount(e.target.value)}
+                            />
+                        </form>
+                        <div className="mt-1.5 text-gray-800 dark:text-gray-300 text-sm font-semibold">
+                            {stakingInfo}
+                        </div>
+                    </div>
+
+                    {/* - Staking Balance - */}
+                    <div className="flex flex-row justify-start items-center">
+                        <div className="h-12 px-4 rounded-l-md border border-gray-200 text-gray-800 dark:text-gray-300 flex flex-col justify-center items-start">
+                            <div>
+                                {stakingBalance}{' '}
+                                <span className="text-indigo-400 dark:text-indigo-300">WETH</span>{' '}
+                            </div>
+                        </div>
+                        <Image
+                            className="w-12 h-12 bg-gray-300 dark:bg-gray-200 rounded-r-md border border-gray-300 dark:border-gray-200
+                            filter brightness-110 dark:brightness-100"
+                            src={'/images/eth-token-2.png'}
+                            alt=""
+                            width={36}
+                            height={36}
+                        />
+                    </div>
+                </div>
+
+                <div className="h-[1px] w-full bg-gray-300 dark:bg-gray-200"></div>
+                {/* - Create New Bot - */}
+                <div className="w-full px-3 flex flex-col justify-start items-center">
+                    {/* Title */}
+                    <div className="h-16 pt-4 flex flex-row justify-center items-center text-black dark:text-white text-2xl font-semibold">
+                        <div>3. Create a New Automated Bot</div>
+                    </div>
+                    {/* Form */}
+                    {/* <form
+                        onSubmit={handleCreateBotSubmit}
+                        className="w-full flex flex-col justify-start items-center mt-8"
+                    >
+                        <div className="w-full flex flex-row justify-between items-center">
+                            <div className="flex flex-col">
+                                <div className="py-0.5 px-5 text-center rounded-t-lg border-t border-x border-gray-200 dark:border-gray-100">
+                                    <div
+                                        className="text-transparent bg-clip-text bg-gradient-to-r
+                                        from-purple-500/90 via-pink-500/90 to-yellow-500/90
+                                        dark:from-purple-300 dark:via-pink-300 dark:to-yellow-300"
+                                    >
+                                        Bot Name
+                                    </div>
+                                </div>
+                                <input
+                                    className="h-10 w-40 text-start pl-2.5 text-gray-500 dark:text-gray-850 bg-gray-200 dark:bg-gray-100 border-gray-100 dark:border-gray-200 rounded-b-md"
+                                    name="botName"
+                                    id="botName"
+                                    type="string"
+                                    required={true}
+                                    value={botName}
+                                    onChange={(e) => setBotName(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex flex-col">
+                                <div className="py-0.5 px-5 text-center rounded-t-lg border-t border-x border-gray-200 dark:border-gray-100">
+                                    <div
+                                        className="text-transparent bg-clip-text bg-gradient-to-r
+                                        from-purple-500/90 via-pink-500/90 to-yellow-500/90
+                                        dark:from-purple-300 dark:via-pink-300 dark:to-yellow-300"
+                                    >
+                                        Order Interval
+                                    </div>
+                                </div>
+                                <input
+                                    className="h-10 w-40 text-start pl-2.5 text-gray-500 dark:text-gray-850 bg-gray-100 dark:bg-gray-100 border-gray-100 dark:border-gray-200 rounded-b-md"
+                                    name="botOrderInterval"
+                                    id="botOrderInterval"
+                                    type="number"
+                                    required={true}
+                                    value={botOrderInterval}
+                                    onChange={(e) => setBotOrderInterval(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex flex-col">
+                                <div className="py-0.5 px-5 text-center rounded-t-lg border-t border-x border-gray-200 dark:border-gray-100">
+                                    <div
+                                        className="text-transparent bg-clip-text bg-gradient-to-r
+                                        from-purple-500/90 via-pink-500/90 to-yellow-500/90
+                                        dark:from-purple-300 dark:via-pink-300 dark:to-yellow-300"
+                                    >
+                                        Order Size
+                                    </div>
+                                </div>
+                                <input
+                                    className="h-10 w-40 text-start text-gray-500 dark:text-gray-850 bg-gray-100 dark:bg-gray-100 border-gray-100 dark:border-gray-200 rounded-b-md"
+                                    name="botOrderSize"
+                                    id="botOrderSize"
+                                    type="number"
+                                    required={true}
+                                    value={botOrderSize}
+                                    onChange={(e) => setBotOrderSize(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <button
+                            type="submit"
+                            className="h-10 w-24 text-center mt-10 mb-6 rounded-md text-white dark:text-gray-850 
+                            bg-red-400 dark:bg-red-300 hover:bg-red-500 hover:dark:bg-red-400"
+                        >
+                            Create
+                        </button>
+                        <div className="mt-1.5 text-gray-800 dark:text-gray-300 text-sm font-semibold">
+                            {botInfo}
+                        </div>
+                    </form> */}
+                    <div className="h-72 w-full flex flex-row justify-start items-center">
+                        {/* - Robot & Tree - */}
+                        <div className="flex flex-row h-48">
+                            <div className="h-full w-28 flex mr-2 flex-col justify-center items-center">
+                                <Image
+                                    className=""
+                                    src={'/images/wall-eth-logo.png'}
+                                    alt=""
+                                    width={112}
+                                    height={112}
+                                />
+                            </div>
+                            <div className="h-full w-24 flex flex-col justify-center items-center">
+                                <div className="w-full h-[1px] bg-gray-300 dark:bg-gray-200"></div>
+                            </div>
+                            <div className="h-full w-16 flex flex-col justify-between items-center">
+                                <div className="h-1/2 w-full rounded-tl-[32px] border-t border-l border-gray-300 dark:border-gray-200"></div>
+                                <div className="h-[1px] w-full bg-gray-300 dark:bg-gray-200"></div>
+                                <div className="h-1/2 w-full rounded-bl-[32px] border-b border-l border-gray-300 dark:border-gray-200"></div>
+                            </div>
+                        </div>
+                        {/* Form */}
+                        <form
+                            onSubmit={handleCreateBotSubmit}
+                            className="h-full w-full flex flex-row justify-center items-stretch"
+                        >
+                            <div className="h-full flex flex-col justify-between items-start py-6">
+                                {/* Name */}
+                                <div className="flex flex-row text-[15px]">
+                                    <div
+                                        className="h-11 w-28 pl-3 flex justify-start items-center rounded-l-md text-white dark:text-gray-850 
+                                        bg-violet-400 dark:bg-violet-400"
+                                    >
+                                        Bot Name
+                                    </div>
+                                    <input
+                                        className="h-11 w-40 text-[15px] text-start pl-2.5 text-gray-500 dark:text-gray-850 bg-gray-200 dark:bg-gray-100 border-gray-100 dark:border-gray-200 rounded-r-md"
+                                        name="botName"
+                                        id="botName"
+                                        type="string"
+                                        required={true}
+                                        value={botName}
+                                        onChange={(e) => setBotName(e.target.value)}
+                                    />
+                                </div>
+                                {/* Order Interval */}
+                                <div className="flex flex-row text-[15px]">
+                                    <div
+                                        className="h-11 w-28 pl-3 flex justify-start items-center rounded-l-md text-white dark:text-gray-850 
+                                        bg-purple-400 dark:bg-purple-400"
+                                    >
+                                        Order Interval
+                                    </div>
+                                    <input
+                                        className="h-11 w-40 text-[15px] text-start pl-2.5 text-gray-500 dark:text-gray-850 bg-gray-100 dark:bg-gray-100 border-gray-100 dark:border-gray-200 rounded-r-md"
+                                        name="botOrderInterval"
+                                        id="botOrderInterval"
+                                        type="number"
+                                        required={true}
+                                        value={botOrderInterval}
+                                        onChange={(e) => setBotOrderInterval(e.target.value)}
+                                    />
+                                </div>
+                                {/* Order Size */}
+                                <div className="flex flex-row text-[15px]">
+                                    <div
+                                        className="h-11 w-28 pl-3 flex justify-start items-center rounded-l-md text-white dark:text-gray-850 
+                                        bg-fuchsia-400 dark:bg-fuchsia-400"
+                                    >
+                                        Order Size
+                                    </div>
+                                    <input
+                                        className="h-11 w-40 text-[15px] text-start text-gray-500 dark:text-gray-850 bg-gray-100 dark:bg-gray-100 border-gray-100 dark:border-gray-200 rounded-r-md"
+                                        name="botOrderSize"
+                                        id="botOrderSize"
+                                        type="number"
+                                        required={true}
+                                        value={botOrderSize}
+                                        onChange={(e) => setBotOrderSize(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="h-full w-full flex flex-row justify-end items-center">
+                                <button
+                                    type="submit"
+                                    className="h-10 px-5 text-center rounded-md text-white dark:text-gray-850 
+                                       bg-gradient-to-br from-violet-400 via-purple-400 to-fuchsia-400
+                                       hover:from-violet-500 hover:via-purple-500 hover:to-fuchsia-500"
+                                >
+                                    <div className="flex flex-row justify-center items-center">
+                                        <div>Launch</div>
+                                        <RocketLaunchIcon className="w-6 h-6 ml-1" />
+                                    </div>
+                                </button>
+                                <div className="mt-1.5 text-gray-800 dark:text-gray-300 text-sm font-semibold">
+                                    {botInfo}
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div className="h-[1px] w-full bg-gray-300 dark:bg-gray-200"></div>
+                {/* - Manage your Bot - */}
+                <div className="h-16 pt-4 flex flex-row justify-center items-center text-black dark:text-white text-2xl font-semibold">
+                    <div>Manage Your Trading Bot</div>
+                </div>
+                {/* - Manage - */}
+                <div className="h-24 w-full px-3 flex flex-row justify-between items-start pt-5">
+                    <div className="h-12 flex justify-start items-center text-lg dark:text-gray-200">
+                        Trading Balance
+                    </div>
+                    {/* - Trading Balance - */}
+                    <div className="flex flex-row justify-start items-center">
+                        <div className="h-12 px-4 rounded-l-md border border-gray-200 text-gray-800 dark:text-gray-300 flex flex-col justify-center items-start">
+                            <div>
+                                {tradingBalance}{' '}
+                                <span className="text-pink-400 dark:text-pink-300">UNI</span>{' '}
+                            </div>
+                        </div>
+                        <Image
+                            className="w-12 h-12 bg-gray-300 dark:bg-gray-200 rounded-r-md border border-gray-300 dark:border-gray-200
+                            filter brightness-110 dark:brightness-100"
+                            src={'/images/uni-token.png'}
+                            alt=""
+                            width={36}
+                            height={36}
+                        />
+                    </div>
+                </div>
+                <div className="h-[1px] w-full bg-gray-300 dark:bg-gray-200"></div>
+                {/* - Withdraw - */}
+                <div className="h-16 pt-4 flex flex-row justify-center items-center text-black dark:text-white text-2xl font-semibold">
+                    <div>Withdraw</div>
+                </div>
+                <div className="h-24 w-full px-3 flex flex-row justify-between items-start pt-5">
+                    {/* - Withdraw Staking Button - */}
+                    <div className="flex flex-col justify-center items-center">
+                        <button
+                            type="button"
+                            onClick={withdrawStaking}
+                            className="h-12 px-5 flex flex-row justify-center items-center rounded-lg text-white dark:text-gray-850 
+                            bg-red-400 dark:bg-red-300 hover:bg-red-500 hover:dark:bg-red-400"
+                        >
+                            <ArrowTopRightOnSquareIcon className="w-5 h-5 rotate-[270deg] mr-1" />
+                            <div>Staking</div>
+                        </button>
+                        <div className="mt-1.5 text-gray-800 dark:text-gray-300 text-sm font-semibold">
+                            {withdrawStakingInfo}
+                        </div>
+                    </div>
                     {/* - Withdraw Button - */}
                     <div className="flex flex-col justify-center items-center">
                         <button
                             type="button"
                             onClick={withdrawFunds}
-                            className="h-10 px-5 rounded-lg text-black dark:text-white bg-gradient-to-r from-green-400 to-blue-500 hover:from-pink-500 hover:to-yellow-500"
+                            className="h-12 px-5 flex flex-row justify-center items-center rounded-lg text-white dark:text-gray-850 
+                            bg-red-400 dark:bg-red-300 hover:bg-red-500 hover:dark:bg-red-400"
                         >
-                            Withdraw
+                            <div>Funding</div>
+                            <ArrowTopRightOnSquareIcon className="w-5 h-5 ml-1" />
                         </button>
                         <div className="mt-1.5 text-gray-800 dark:text-gray-300 text-sm font-semibold">
                             {withdrawFundingInfo}
